@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OccuRadar — Radar-Guided 3D Occupancy Network | Zendar</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --occ-cyan: #06d6a0;
+            --occ-magenta: #ef476f;
+            --occ-blue: #118ab2;
+            --occ-yellow: #ffd166;
+            --occ-white: #f0f6fc;
+            --bg-0: #060b18;
+            --bg-1: #0c1425;
+            --bg-2: #142036;
+            --bg-3: #1d2d4d;
+            --text-0: #e8edf5;
+            --text-1: #8892a8;
+            --text-2: #4d5a72;
+            --border: #1e2d4a;
+            --gradient: linear-gradient(135deg, #06d6a0 0%, #118ab2 50%, #ef476f 100%);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-0);
+            color: var(--text-0);
+            min-height: 100vh;
+        }
+        .topbar {
+            background: rgba(12, 20, 37, 0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 0.55rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            backdrop-filter: blur(12px);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .brand { display: flex; align-items: center; gap: 0.6rem; }
+        .brand-icon {
+            width: 38px; height: 38px;
+            background: var(--gradient);
+            border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem;
+            box-shadow: 0 0 16px rgba(6, 214, 160, 0.3);
+        }
+        .brand-name { font-size: 1.2rem; font-weight: 800; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .brand-sub { font-size: 0.5rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 2.5px; }
+        .pills { display: flex; gap: 0.3rem; }
+        .pill { padding: 0.25rem 0.55rem; border-radius: 5px; font-size: 0.55rem; font-family: 'JetBrains Mono', monospace; background: var(--bg-2); border: 1px solid var(--border); color: var(--text-1); }
+        .pill.live { background: rgba(6,214,160,0.12); border-color: var(--occ-cyan); color: var(--occ-cyan); animation: blink 2s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+        .shell { max-width: 1800px; margin: 0 auto; padding: 1rem 1.5rem; }
+        .hero { text-align: center; margin-bottom: 1rem; }
+        .hero h1 { font-size: 1.8rem; font-weight: 900; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.2rem; }
+        .hero p { color: var(--text-1); font-size: 0.85rem; }
+
+        .stats-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+        .ss-box { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; padding: 0.55rem; text-align: center; }
+        .ss-val { font-size: 1rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .ss-val.c1 { color: var(--occ-cyan); } .ss-val.c2 { color: var(--occ-blue); }
+        .ss-val.c3 { color: var(--occ-magenta); } .ss-val.c4 { color: var(--occ-yellow); }
+        .ss-lbl { font-size: 0.5rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        @media(max-width:1200px){ .grid3{grid-template-columns:1fr;} .stats-strip{grid-template-columns:repeat(3,1fr);} }
+
+        .card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+        .card-hd { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: rgba(20,32,54,0.5); }
+        .card-tt { font-size: 0.78rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+        .card-tg { font-size: 0.55rem; font-family: 'JetBrains Mono', monospace; color: var(--text-2); }
+        .card-bd { padding: 1rem; }
+
+        /* 3D Occupancy viz */
+        .occ-view { position: relative; background: var(--bg-0); border-radius: 10px; overflow: hidden; aspect-ratio: 4/3; margin-bottom: 0.6rem; cursor: grab; }
+        .occ-canvas { width: 100%; height: 100%; }
+        .occ-label { position: absolute; top: 6px; left: 6px; background: var(--gradient); color: #000; padding: 2px 7px; border-radius: 4px; font-size: 0.55rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+        /* Legend */
+        .legend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+        .legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.6rem; color: var(--text-1); }
+        .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+        /* Depth comparison */
+        .depth-view { position: relative; background: var(--bg-0); border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; margin-bottom: 0.6rem; }
+        .depth-canvas { width: 100%; height: 100%; }
+        .depth-label { position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 4px; font-size: 0.55rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .depth-label.cam { background: rgba(17,138,178,0.9); color: #fff; }
+        .depth-label.rad { background: rgba(6,214,160,0.9); color: #000; }
+
+        /* Bars */
+        .bar-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+        .bar-lbl { width: 70px; font-size: 0.6rem; color: var(--text-1); font-weight: 600; }
+        .bar-track { flex: 1; height: 7px; background: var(--bg-0); border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .bar-fill.cy { background: var(--occ-cyan); }
+        .bar-fill.bl { background: var(--occ-blue); }
+        .bar-fill.mg { background: var(--occ-magenta); }
+        .bar-fill.gd { background: var(--gradient); }
+        .bar-val { width: 38px; text-align: right; font-size: 0.6rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+        /* Controls */
+        .ctrls { display: flex; gap: 0.35rem; margin-bottom: 0.6rem; }
+        .cb {
+            flex: 1; padding: 0.55rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text-0); font-family: 'Outfit', sans-serif; font-size: 0.7rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+        }
+        .cb:hover { border-color: var(--occ-cyan); background: rgba(6,214,160,0.08); }
+        .cb.on { border-color: var(--occ-cyan); background: rgba(6,214,160,0.15); color: var(--occ-cyan); }
+
+        /* Voxel class table */
+        .vtable { width: 100%; border-collapse: collapse; }
+        .vtable th { font-size: 0.55rem; color: var(--text-2); text-transform: uppercase; padding: 0.4rem 0.3rem; text-align: left; border-bottom: 1px solid var(--border); }
+        .vtable td { font-size: 0.65rem; padding: 0.35rem 0.3rem; border-bottom: 1px solid rgba(30,45,74,0.5); }
+        .vtable .cls-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.3rem; vertical-align: middle; }
+        .vtable .val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+        /* Loading */
+        .loading { position: fixed; inset: 0; background: rgba(6,11,24,0.97); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .loading.show { display: flex; }
+        .loader-cubes { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; width: 70px; height: 70px; margin-bottom: 1.5rem; }
+        .loader-cube { background: var(--occ-cyan); border-radius: 3px; animation: cubeAnim 1.2s ease-in-out infinite; }
+        .loader-cube:nth-child(2){animation-delay:0.1s;background:var(--occ-blue)}
+        .loader-cube:nth-child(3){animation-delay:0.2s}
+        .loader-cube:nth-child(4){animation-delay:0.3s;background:var(--occ-magenta)}
+        .loader-cube:nth-child(5){animation-delay:0.15s;background:var(--occ-blue)}
+        .loader-cube:nth-child(6){animation-delay:0.25s}
+        .loader-cube:nth-child(7){animation-delay:0.35s;background:var(--occ-yellow)}
+        .loader-cube:nth-child(8){animation-delay:0.4s}
+        .loader-cube:nth-child(9){animation-delay:0.2s;background:var(--occ-magenta)}
+        .loader-cube:nth-child(10){animation-delay:0.3s}
+        .loader-cube:nth-child(11){animation-delay:0.4s;background:var(--occ-blue)}
+        .loader-cube:nth-child(12){animation-delay:0.5s}
+        .loader-cube:nth-child(13){animation-delay:0.35s;background:var(--occ-yellow)}
+        .loader-cube:nth-child(14){animation-delay:0.45s;background:var(--occ-magenta)}
+        .loader-cube:nth-child(15){animation-delay:0.55s}
+        .loader-cube:nth-child(16){animation-delay:0.6s;background:var(--occ-blue)}
+        @keyframes cubeAnim { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }
+        .loader-txt { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.3rem; }
+        .loader-stg { font-size: 0.75rem; color: var(--text-2); font-family: 'JetBrains Mono', monospace; margin-bottom: 1rem; }
+        .loader-trk { width: 220px; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+        .loader-fill { height: 100%; background: var(--gradient); width: 0%; transition: width 0.3s; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 10px 40px rgba(0,0,0,0.5); transform: translateY(70px); opacity: 0; transition: all 0.4s; z-index: 1000; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast-tt { font-size: 0.75rem; font-weight: 600; }
+        .toast-mg { font-size: 0.55rem; color: var(--text-2); }
+
+        ::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:var(--bg-0)} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">
+        <div class="brand-icon">🧊</div>
+        <div><div class="brand-name">OccuRadar</div><div class="brand-sub">Zendar 3D Occupancy</div></div>
+    </div>
+    <div class="pills">
+        <span class="pill live">● INFERENCE</span>
+        <span class="pill">Radar Depth Guidance</span>
+        <span class="pill">3D Voxel Grid</span>
+        <span class="pill">Occ3D / K-Radar</span>
+    </div>
+</div>
+
+<div class="shell">
+    <div class="hero">
+        <h1>🧊 OccuRadar — Radar-Guided 3D Occupancy</h1>
+        <p>Dense 3D occupancy prediction using radar as depth backbone + camera for semantics — no LiDAR required</p>
+    </div>
+
+    <div class="stats-strip">
+        <div class="ss-box"><div class="ss-val c1" id="voxels">—</div><div class="ss-lbl">Active Voxels</div></div>
+        <div class="ss-box"><div class="ss-val c2" id="oIoU">—</div><div class="ss-lbl">Overall IoU</div></div>
+        <div class="ss-box"><div class="ss-val c3" id="freeIoU">—</div><div class="ss-lbl">Free Space IoU</div></div>
+        <div class="ss-box"><div class="ss-val c4" id="latency">—</div><div class="ss-lbl">Latency (ms)</div></div>
+        <div class="ss-box"><div class="ss-val c1" id="memUsage">—</div><div class="ss-lbl">GPU Memory</div></div>
+        <div class="ss-box"><div class="ss-val c2" id="voxRes">0.2m</div><div class="ss-lbl">Voxel Size</div></div>
+    </div>
+
+    <div class="grid3">
+        <!-- 3D Occupancy -->
+        <div class="card">
+            <div class="card-hd"><span class="card-tt">🧊 3D Occupancy Grid</span><span class="card-tg">200m×200m×16m</span></div>
+            <div class="card-bd">
+                <div class="occ-view">
+                    <canvas class="occ-canvas" id="occCanvas"></canvas>
+                    <div class="occ-label">FUSED OCCUPANCY</div>
+                </div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-dot" style="background:#ef476f"></div>Vehicle</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#ffd166"></div>Pedestrian</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#06d6a0"></div>Free Space</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#118ab2"></div>Road</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#8892a8"></div>Building</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#ff9f1c"></div>Barrier</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Depth comparison -->
+        <div class="card">
+            <div class="card-hd"><span class="card-tt">📏 Depth Estimation</span><span class="card-tg">Cam-only vs Radar-guided</span></div>
+            <div class="card-bd">
+                <div class="depth-view">
+                    <canvas class="depth-canvas" id="camDepthCanvas"></canvas>
+                    <div class="depth-label cam">CAMERA-ONLY DEPTH</div>
+                </div>
+                <div class="depth-view">
+                    <canvas class="depth-canvas" id="radDepthCanvas"></canvas>
+                    <div class="depth-label rad">RADAR-GUIDED DEPTH</div>
+                </div>
+                <div style="font-size:0.65rem;color:var(--text-2);text-align:center;margin-top:0.3rem;">Radar provides sparse but precise depth → guides monocular depth estimation</div>
+            </div>
+        </div>
+
+        <!-- Metrics + Controls -->
+        <div class="card">
+            <div class="card-hd"><span class="card-tt">⚙️ Controls & Metrics</span></div>
+            <div class="card-bd">
+                <div class="ctrls">
+                    <button class="cb" id="goBtn" onclick="toggleGo()">▶️ <span id="goLbl">Start</span></button>
+                    <button class="cb" onclick="resetOcc()">🔄 Reset</button>
+                    <button class="cb" onclick="cycleScene()">🎬 Next Scene</button>
+                </div>
+
+                <div style="font-size:0.7rem;font-weight:700;margin-bottom:0.5rem;color:var(--text-1);">Per-Class IoU Comparison</div>
+
+                <div class="bar-row"><span class="bar-lbl">Vehicle</span><div class="bar-track"><div class="bar-fill bl" id="bCamV" style="width:0%"></div></div><span class="bar-val" id="vCamV">—</span></div>
+                <div class="bar-row"><span class="bar-lbl" style="color:var(--occ-cyan)">↳ Fused</span><div class="bar-track"><div class="bar-fill gd" id="bFusV" style="width:0%"></div></div><span class="bar-val" id="vFusV">—</span></div>
+
+                <div class="bar-row"><span class="bar-lbl">Pedestrian</span><div class="bar-track"><div class="bar-fill bl" id="bCamP" style="width:0%"></div></div><span class="bar-val" id="vCamP">—</span></div>
+                <div class="bar-row"><span class="bar-lbl" style="color:var(--occ-cyan)">↳ Fused</span><div class="bar-track"><div class="bar-fill gd" id="bFusP" style="width:0%"></div></div><span class="bar-val" id="vFusP">—</span></div>
+
+                <div class="bar-row"><span class="bar-lbl">Road</span><div class="bar-track"><div class="bar-fill bl" id="bCamR" style="width:0%"></div></div><span class="bar-val" id="vCamR">—</span></div>
+                <div class="bar-row"><span class="bar-lbl" style="color:var(--occ-cyan)">↳ Fused</span><div class="bar-track"><div class="bar-fill gd" id="bFusR" style="width:0%"></div></div><span class="bar-val" id="vFusR">—</span></div>
+
+                <div class="bar-row"><span class="bar-lbl">Building</span><div class="bar-track"><div class="bar-fill bl" id="bCamB" style="width:0%"></div></div><span class="bar-val" id="vCamB">—</span></div>
+                <div class="bar-row"><span class="bar-lbl" style="color:var(--occ-cyan)">↳ Fused</span><div class="bar-track"><div class="bar-fill gd" id="bFusB" style="width:0%"></div></div><span class="bar-val" id="vFusB">—</span></div>
+
+                <div class="bar-row"><span class="bar-lbl">Free Space</span><div class="bar-track"><div class="bar-fill bl" id="bCamF" style="width:0%"></div></div><span class="bar-val" id="vCamF">—</span></div>
+                <div class="bar-row"><span class="bar-lbl" style="color:var(--occ-cyan)">↳ Fused</span><div class="bar-track"><div class="bar-fill gd" id="bFusF" style="width:0%"></div></div><span class="bar-val" id="vFusF">—</span></div>
+
+                <div style="margin-top:0.6rem;">
+                <table class="vtable">
+                    <tr><th>Class</th><th>Voxels</th><th>Cam IoU</th><th>Fused IoU</th><th>Δ</th></tr>
+                    <tr><td><span class="cls-dot" style="background:#ef476f"></span>Vehicle</td><td class="val" id="tVoxV">—</td><td class="val" id="tCamV">—</td><td class="val" id="tFusV">—</td><td class="val" style="color:var(--occ-cyan)" id="tDV">—</td></tr>
+                    <tr><td><span class="cls-dot" style="background:#ffd166"></span>Pedestrian</td><td class="val" id="tVoxP">—</td><td class="val" id="tCamP">—</td><td class="val" id="tFusP">—</td><td class="val" style="color:var(--occ-cyan)" id="tDP">—</td></tr>
+                    <tr><td><span class="cls-dot" style="background:#118ab2"></span>Road</td><td class="val" id="tVoxR">—</td><td class="val" id="tCamR">—</td><td class="val" id="tFusR">—</td><td class="val" style="color:var(--occ-cyan)" id="tDR">—</td></tr>
+                    <tr><td><span class="cls-dot" style="background:#8892a8"></span>Building</td><td class="val" id="tVoxB">—</td><td class="val" id="tCamB">—</td><td class="val" id="tFusB">—</td><td class="val" style="color:var(--occ-cyan)" id="tDB">—</td></tr>
+                    <tr><td><span class="cls-dot" style="background:#06d6a0"></span>Free Space</td><td class="val" id="tVoxF">—</td><td class="val" id="tCamF">—</td><td class="val" id="tFusF">—</td><td class="val" style="color:var(--occ-cyan)" id="tDF">—</td></tr>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="loading" id="loadOv">
+    <div class="loader-cubes"><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div><div class="loader-cube"></div></div>
+    <div class="loader-txt">Initializing OccuRadar...</div>
+    <div class="loader-stg" id="lStg">Loading voxel encoder...</div>
+    <div class="loader-trk"><div class="loader-fill" id="lBar"></div></div>
+</div>
+
+<div class="toast" id="toast"><span>✅</span><div><div class="toast-tt" id="tTt">OK</div><div class="toast-mg" id="tMg">msg</div></div></div>
+
+<script>
+let go=false, iv=null, scene=0, angle=0;
+const scenes=[
+    {cam:{v:42,p:18,r:72,b:55,f:68},fus:{v:71,p:39,r:85,b:74,f:89}},
+    {cam:{v:38,p:14,r:65,b:48,f:61},fus:{v:68,p:35,r:82,b:70,f:86}},
+    {cam:{v:28,p:10,r:58,b:42,f:54},fus:{v:64,p:31,r:79,b:67,f:83}},
+];
+
+function toggleGo(){if(!go)startGo();else stopGo();}
+
+function startGo(){
+    const ov=document.getElementById('loadOv');ov.classList.add('show');
+    const stgs=['Loading voxel encoder...','Building 3D sparse conv layers...','Initializing radar depth backbone...','Setting up occupancy head...','Compiling prediction grid...','Ready...'];
+    let p=0,si=0;
+    const iv2=setInterval(()=>{
+        p+=Math.random()*18+6;if(p>100)p=100;
+        document.getElementById('lBar').style.width=p+'%';
+        const ns=Math.floor(p/100*stgs.length);
+        if(ns!==si&&ns<stgs.length){si=ns;document.getElementById('lStg').textContent=stgs[si];}
+        if(p>=100){clearInterval(iv2);setTimeout(()=>{ov.classList.remove('show');beginGo();},300);}
+    },85);
+}
+
+function beginGo(){
+    go=true;document.getElementById('goBtn').classList.add('on');document.getElementById('goLbl').textContent='Pause';
+    updateMetrics();
+    iv=setInterval(tick,500);
+    toast('Running','3D occupancy inference active');
+}
+
+function stopGo(){go=false;document.getElementById('goBtn').classList.remove('on');document.getElementById('goLbl').textContent='Start';if(iv)clearInterval(iv);toast('Paused','Inference suspended');}
+
+function resetOcc(){
+    stopGo();
+    ['voxels','oIoU','freeIoU','latency','memUsage'].forEach(id=>document.getElementById(id).textContent='—');
+    clearCanvas('occCanvas');clearCanvas('camDepthCanvas');clearCanvas('radDepthCanvas');
+    toast('Reset','Data cleared');
+}
+
+function cycleScene(){scene=(scene+1)%scenes.length;if(go)updateMetrics();toast('Scene '+(scene+1),'Loaded new driving scene');}
+
+function tick(){
+    const lat=45+Math.random()*20;
+    document.getElementById('latency').textContent=lat.toFixed(0)+'ms';
+    document.getElementById('voxels').textContent=(12000+Math.floor(Math.random()*5000)).toLocaleString();
+    document.getElementById('memUsage').textContent=(2.1+Math.random()*0.8).toFixed(1)+'GB';
+    const s=scenes[scene];
+    const oi=((s.fus.v+s.fus.p+s.fus.r+s.fus.b+s.fus.f)/5+Math.random()*4-2).toFixed(1);
+    document.getElementById('oIoU').textContent=oi+'%';
+    document.getElementById('freeIoU').textContent=(s.fus.f+Math.random()*4-2).toFixed(1)+'%';
+    angle+=0.8;
+    drawOcc();
+    drawDepthMaps();
+}
+
+function updateMetrics(){
+    const s=scenes[scene];
+    const pairs=[['V','v'],['P','p'],['R','r'],['B','b'],['F','f']];
+    pairs.forEach(([k,sk])=>{
+        const cv=s.cam[sk],fv=s.fus[sk];
+        document.getElementById('bCam'+k).style.width=cv+'%';document.getElementById('vCam'+k).textContent=cv+'%';
+        document.getElementById('bFus'+k).style.width=fv+'%';document.getElementById('vFus'+k).textContent=fv+'%';
+        document.getElementById('tCam'+k).textContent=cv+'%';document.getElementById('tFus'+k).textContent=fv+'%';
+        document.getElementById('tD'+k).textContent='+'+(fv-cv)+'%';
+        document.getElementById('tVox'+k).textContent=Math.floor(1000+Math.random()*4000);
+    });
+}
+
+function drawOcc(){
+    const c=document.getElementById('occCanvas');const ctx=c.getContext('2d');
+    if(c.width!==c.offsetWidth){c.width=c.offsetWidth;c.height=c.offsetHeight;}
+    ctx.fillStyle='#060b18';ctx.fillRect(0,0,c.width,c.height);
+    const cx=c.width/2,cy=c.height*0.55;
+    const colors=['#ef476f','#ffd166','#118ab2','#8892a8','#ff9f1c','#06d6a0'];
+    const cosA=Math.cos(angle*Math.PI/180),sinA=Math.sin(angle*Math.PI/180);
+    // Ground grid
+    ctx.strokeStyle='rgba(6,214,160,0.06)';ctx.lineWidth=1;
+    for(let i=-5;i<=5;i++){
+        const x1=cx+(i*25)*cosA,y1=cy+(i*25)*sinA*0.4;
+        const x2=cx+(i*25)*cosA-125*sinA*0.4,y2=cy+(i*25)*sinA*0.4-125*cosA*0.4;
+        ctx.beginPath();ctx.moveTo(cx+(i*25)*cosA+125*sinA*0.4,cy+(i*25)*sinA*0.4+125*cosA*0.4);ctx.lineTo(x2,y2);ctx.stroke();
+    }
+    // Voxel columns
+    const numVox=80+Math.floor(Math.random()*30);
+    const voxels=[];
+    for(let i=0;i<numVox;i++){
+        const gx=(Math.random()-0.5)*200,gy=(Math.random()-0.5)*200;
+        const sx=cx+gx*cosA+gy*sinA*0.4;
+        const sy=cy+gx*sinA*0.4-gy*cosA*0.4;
+        const h=3+Math.random()*25;
+        const ci=Math.floor(Math.random()*colors.length);
+        voxels.push({sx,sy,h,color:colors[ci],depth:gy});
+    }
+    voxels.sort((a,b)=>a.depth-b.depth);
+    voxels.forEach(v=>{
+        const w=8,hh=v.h;
+        ctx.fillStyle=v.color;ctx.globalAlpha=0.7;
+        ctx.fillRect(v.sx-w/2,v.sy-hh,w,hh);
+        ctx.globalAlpha=0.3;
+        ctx.fillStyle='#fff';
+        ctx.fillRect(v.sx-w/2,v.sy-hh,w,2);
+        ctx.globalAlpha=1;
+    });
+    // Ego
+    ctx.fillStyle='#06d6a0';ctx.fillRect(cx-5,cy-8,10,16);
+}
+
+function drawDepthMaps(){
+    // Camera depth (noisy, ambiguous)
+    const c1=document.getElementById('camDepthCanvas');const x1=c1.getContext('2d');
+    if(c1.width!==c1.offsetWidth){c1.width=c1.offsetWidth;c1.height=c1.offsetHeight;}
+    x1.fillStyle='#060b18';x1.fillRect(0,0,c1.width,c1.height);
+    for(let y=0;y<c1.height;y+=3){
+        for(let x=0;x<c1.width;x+=3){
+            const d=y/c1.height;
+            const noise=Math.random()*0.3;
+            const v=Math.floor((d+noise)*0.5*255);
+            x1.fillStyle=`rgb(${v*0.3},${v*0.5},${v})`;
+            x1.fillRect(x,y,3,3);
+        }
+    }
+    // Radar-guided depth (clean, structured)
+    const c2=document.getElementById('radDepthCanvas');const x2=c2.getContext('2d');
+    if(c2.width!==c2.offsetWidth){c2.width=c2.offsetWidth;c2.height=c2.offsetHeight;}
+    x2.fillStyle='#060b18';x2.fillRect(0,0,c2.width,c2.height);
+    for(let y=0;y<c2.height;y+=3){
+        for(let x=0;x<c2.width;x+=3){
+            const d=y/c2.height;
+            const noise=Math.random()*0.08;
+            const cx2=c2.width/2;
+            const distFromCenter=Math.abs(x-cx2)/cx2;
+            const v=Math.floor((d+noise-distFromCenter*0.1)*0.6*255);
+            const clamped=Math.max(0,Math.min(255,v));
+            x2.fillStyle=`rgb(${clamped*0.1},${clamped*0.8},${clamped*0.5})`;
+            x2.fillRect(x,y,3,3);
+        }
+    }
+    // Radar sparse points overlay
+    for(let i=0;i<30;i++){
+        const px=Math.random()*c2.width,py=Math.random()*c2.height;
+        x2.fillStyle='rgba(6,214,160,0.9)';
+        x2.beginPath();x2.arc(px,py,3,0,Math.PI*2);x2.fill();
+        x2.fillStyle='rgba(6,214,160,0.2)';
+        x2.beginPath();x2.arc(px,py,8,0,Math.PI*2);x2.fill();
+    }
+}
+
+function clearCanvas(id){
+    const c=document.getElementById(id);const ctx=c.getContext('2d');
+    if(c.width!==c.offsetWidth){c.width=c.offsetWidth;c.height=c.offsetHeight;}
+    ctx.fillStyle='#060b18';ctx.fillRect(0,0,c.width,c.height);
+}
+
+function toast(t,m){
+    const el=document.getElementById('toast');document.getElementById('tTt').textContent=t;document.getElementById('tMg').textContent=m;
+    el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);
+}
+
+window.addEventListener('load',()=>{setTimeout(()=>{clearCanvas('occCanvas');clearCanvas('camDepthCanvas');clearCanvas('radDepthCanvas');},100);});
+</script>
+</body>
+</html>
